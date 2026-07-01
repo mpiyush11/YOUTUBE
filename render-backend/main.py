@@ -4,41 +4,66 @@ from flask_cors import CORS
 import yt_dlp
 
 app = Flask(__name__)
+# Allow requests from any origin (for testing). 
+# In production, restrict this to your specific Vercel domain.
 CORS(origins="*")
+
+@app.route('/')
+def home():
+    return "YouTube Downloader API is running. Use /info and /download endpoints."
 
 @app.route('/info', methods=['POST'])
 def get_video_info():
     data = request.json
     url = data.get('url')
+
     if not url:
         return jsonify({"error": "No URL provided"}), 400
+
     try:
-        ydl_opts = {'quiet': True, 'no_warnings': True, 'extract_flat': False}
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+        }
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            if not info:
-                return jsonify({"error": "Video not found"}), 404
             
+            if not info:
+                return jsonify({"error": "Video not found or private"}), 404
+
             formats = []
-            seen = set()
-            for f in info.get('formats', []):
-                h = f.get('height')
-                if h and f.get('url'):
-                    res = f"{h}p"
-                    if res not in seen:
-                        seen.add(res)
+            seen_resolutions = set()
+
+            # Filter formats
+            for format in info.get('formats', []):
+                height = format.get('height')
+                if height and format.get('url'):
+                    resolution = f"{height}p"
+                    format_id = format.get('format_id')
+                    ext = format.get('ext', 'mp4')
+                    # FIXED: Added missing closing quote below
+                    has_audio = format.get('acodec') != 'none'
+                    
+                    if resolution not in seen_resolutions:
+                        seen_resolutions.add(resolution)
                         formats.append({
-                            "resolution": res,
-                            "format_id": f.get('format_id'),
-                            "ext": f.get('ext', 'mp4'),
-                            "has_audio": f.get('acodec') != 'none
+                            "resolution": resolution,
+                            "format_id": format_id,
+                            "ext": ext,
+                            "has_audio": has_audio
                         })
+            
             formats.sort(key=lambda x: int(x['resolution'].replace('p', '')), reverse=True)
+
             return jsonify({
                 "title": info.get('title'),
                 "thumbnail": info.get('thumbnail'),
+                "duration": info.get('duration'),
                 "formats": formats
             })
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -46,10 +71,16 @@ def get_video_info():
 def download_video():
     url = request.args.get('url')
     format_id = request.args.get('format_id')
+    
     if not url or not format_id:
-        return jsonify({"error": "Missing params"}), 400
+        return jsonify({"error": "Missing URL or Format ID"}), 400
+
     try:
-        ydl_opts = {'quiet': True, 'no_warnings': True, 'format': format_id}
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'format': format_id,
+        }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             direct_url = info.get('url')
@@ -57,7 +88,8 @@ def download_video():
                 return jsonify({"download_url": direct_url})
             return jsonify({"error": "No link generated"}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": str(e"}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
