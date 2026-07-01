@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; background: #f0f0f0; }
+        .container { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #ff0000; }
+        input[type="text"] { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 10px; background: #ff0000; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #cc0000; }
+        #result { margin-top: 20px; }
+        .format-btn { display: block; width: 100%; padding: 10px; margin: 5px 0; background: #333; color: white; text-decoration: none; text-align: center; border-radius: 4px; box-sizing: border-box; }
+        .format-btn:hover { background: #555; }
+        .warning { background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 10px; border: 1px solid #ffeeba; }
+        .error { color: red; text-align: center; }
+        img { max-width: 100%; border-radius: 4px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube Downloader</h1>
+        <input type="text" id="videoUrl" placeholder="Paste YouTube URL here...">
+        <button onclick="getFormats()">Get Download Options</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        // REPLACE THIS WITH YOUR RENDER APP URL
+        const BACKEND_URL = 'https://YOUR-RENDER-APP-NAME.onrender.com'; 
+
+        async function getFormats() {
+            const urlInput = document.getElementById('videoUrl').value;
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p style="text-align:center">Processing...</p>';
+
+            if (!urlInput) {
+                resultDiv.innerHTML = '<p class="error">Please enter a valid URL.</p>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/info`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: urlInput })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to fetch video info');
+                }
+
+                let html = `<img src="${data.thumbnail}" alt="Thumbnail">`;
+                html += `<h2>${data.title}</h2>`;
+                
+                if (data.formats.length === 0) {
+                    html += '<p class="error">No downloadable formats found.</p>';
+                } else {
+                    html += '<h3>Available Qualities:</h3>';
+                    data.formats.forEach(format => {
+                        const warning = !format.has_audio ? '<div class="warning">⚠️ Warning: This format is Video Only (No Audio). For audio, please choose a lower resolution or use a dedicated audio extractor.</div>' : '';
+                        const downloadUrl = `${BACKEND_URL}/download?url=${encodeURIComponent(urlInput)}&format_id=${format.format_id}`;
+                        html += `${warning}<a href="#" class="format-btn" onclick="triggerDownload('${downloadUrl}', '${format.resolution}')">Download ${format.resolution} ${format.ext.toUpperCase()} ${format.has_audio ? '(With Audio)' : '(Video Only)'}</a>`;
+                    });
+                }
+
+                resultDiv.innerHTML = html;
+
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        async function triggerDownload(downloadUrl, quality) {
+            try {
+                const response = await fetch(downloadUrl);
+                const data = await response.json();
+                
+                if (data.download_url) {
+                    const a = document.createElement('a');
+                    a.href = data.download_url;
+                    a.download = '';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                } else {
+                    alert('Failed to generate download link for ' + quality);
+                }
+            } catch (error) {
+                alert('Error downloading ' + quality + ': ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
