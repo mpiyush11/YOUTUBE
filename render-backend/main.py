@@ -4,13 +4,11 @@ from flask_cors import CORS
 import yt_dlp
 
 app = Flask(__name__)
-# Allow requests from any origin (for testing). 
-# In production, restrict this to your specific Vercel domain.
 CORS(origins="*")
 
 @app.route('/')
 def home():
-    return "YouTube Downloader API is running. Use /info and /download endpoints."
+    return "YouTube Downloader API is running."
 
 @app.route('/info', methods=['POST'])
 def get_video_info():
@@ -36,14 +34,13 @@ def get_video_info():
             formats = []
             seen_resolutions = set()
 
-            # Filter formats
             for format in info.get('formats', []):
                 height = format.get('height')
                 if height and format.get('url'):
                     resolution = f"{height}p"
                     format_id = format.get('format_id')
                     ext = format.get('ext', 'mp4')
-                    # FIXED: Added missing closing quote below
+                    # Fixed: Proper string comparison
                     has_audio = format.get('acodec') != 'none'
                     
                     if resolution not in seen_resolutions:
@@ -65,6 +62,7 @@ def get_video_info():
             })
 
     except Exception as e:
+        # Fixed: Proper error handling syntax
         return jsonify({"error": str(e)}), 500
 
 @app.route('/download', methods=['GET'])
@@ -88,7 +86,8 @@ def download_video():
                 return jsonify({"download_url": direct_url})
             return jsonify({"error": "No link generated"}), 500
     except Exception as e:
-        return jsonify({"error": str(e"}), 500
+        # Fixed: Proper error handling syntax
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
